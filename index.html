@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leaf Disease Prediction</title>
+  <style>
+    #camera {
+      border: 1px solid #ccc;
+    }
+    #photo {
+      display: none;
+      max-width: 100%;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Leaf Disease Prediction</h1>
+  
+  <h2>Take a photo or upload an image</h2>
+
+  <!-- Button to trigger camera -->
+  <button onclick="startCamera()">Start Camera</button>
+
+  <!-- Button to stop camera -->
+  <button onclick="stopCamera()">Stop Camera</button>
+
+  <!-- Camera preview -->
+  <video id="camera" width="320" height="240" autoplay></video>
+
+  <!-- Button to capture photo -->
+  <button onclick="capturePhoto()">Capture Photo</button>
+
+  <!-- Button to remove captured photo -->
+  <button onclick="removePhoto()">Remove Photo</button>
+
+  <!-- Image element to show captured photo -->
+  <img id="photo" src="" alt="Captured Image">
+
+  <!-- Form for predict image -->
+  <form id="uploadForm" action="/predict" method="POST" enctype="multipart/form-data">
+    <input type="file" name="image" id="uploadImage" accept="image/*">
+    <input type="submit" value="Predict">
+  </form>
+
+  <h2>Prediction Result</h2>
+  <p id="prediction"></p>
+  <p id="suggestion"></p>
+
+  <script>
+    let videoStream;
+    const cameraElement = document.getElementById('camera');
+    const photoElement = document.getElementById('photo');
+    const predictionElement = document.getElementById('prediction');
+    const suggestionElement = document.getElementById('suggestion');
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadImageInput = document.getElementById('uploadImage');
+
+    // Start camera to capture photo
+    function startCamera() {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then((stream) => {
+          videoStream = stream;
+          cameraElement.srcObject = stream;
+        })
+        .catch((error) => {
+          console.error('Error accessing the camera: ', error);
+        });
+    }
+
+    // Stop camera
+    function stopCamera() {
+      if (videoStream) {
+        let tracks = videoStream.getTracks();
+        tracks.forEach(track => track.stop()); // Stop all video tracks
+        cameraElement.srcObject = null; // Disconnect video stream from video element
+      }
+    }
+
+    // Capture photo from camera
+    function capturePhoto() {
+      const canvas = document.createElement('canvas');
+      canvas.width = cameraElement.videoWidth;
+      canvas.height = cameraElement.videoHeight;
+      canvas.getContext('2d').drawImage(cameraElement, 0, 0);
+      
+      const dataUrl = canvas.toDataURL('image/png');
+      photoElement.src = dataUrl;
+      photoElement.style.display = 'block';
+
+      // Optional: Allow the user to upload this photo directly
+      uploadImageInput.files = createFileListFromDataUrl(dataUrl);
+    }
+
+    // Remove captured photo
+    function removePhoto() {
+      photoElement.src = ''; // Clear the image
+      photoElement.style.display = 'none'; // Hide the image element
+      uploadImageInput.value = ''; // Reset the file input (optional)
+    }
+
+    // Convert data URL to FileList for input
+    function createFileListFromDataUrl(dataUrl) {
+      const blob = dataURLtoBlob(dataUrl);
+      const file = new File([blob], 'photo.png', { type: 'image/png' });
+      return new DataTransfer().files = [file];
+    }
+
+    // Convert data URL to Blob
+    function dataURLtoBlob(dataUrl) {
+      const byteString = atob(dataUrl.split(',')[1]);
+      const arrayBuffer = new ArrayBuffer(byteString.length);
+      const uintArray = new Uint8Array(arrayBuffer);
+      for (let i = 0; i < byteString.length; i++) {
+        uintArray[i] = byteString.charCodeAt(i);
+      }
+      return new Blob([uintArray], { type: 'image/png' });
+    }
+
+    // Handle form submission and send image to Flask server for prediction
+    uploadForm.onsubmit = function(event) {
+      event.preventDefault();
+
+      const formData = new FormData(uploadForm);
+
+      fetch('/predict', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        predictionElement.textContent = data.prediction;
+        suggestionElement.textContent = 'Suggestion: ' + data.suggestion;
+      })
+      .catch(error => {
+        console.error('Error uploading image: ', error);
+        predictionElement.textContent = 'Error in prediction.';
+        suggestionElement.textContent = '';
+      });
+    };
+  </script>
+</body>
+</html>
